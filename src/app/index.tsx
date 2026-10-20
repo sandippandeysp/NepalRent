@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,135 +16,63 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [gender, setGender] = useState("Male"); // Default Gender: Male
-  const [userRole, setUserRole] = useState("Tenant"); // Default Role: Tenant
-
-  // OTP State
-  const [otp, setOtp] = useState("");
-  const [showOtpScreen, setShowOtpScreen] = useState(false);
+  const [gender, setGender] = useState("Male");
+  const [userRole, setUserRole] = useState("Tenant");
 
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  // युजर पहिल्यै लगइन छ कि छैन जाँच गर्ने
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUser(user);
-      setCheckingAuth(false);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          setUser(null);
-        }
-        setCheckingAuth(false);
-      },
-    );
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    // User already logged in cha bhane direct '/home' ma pathaune
+    checkUserSession();
   }, []);
 
-  // इमेल जाँच गर्ने Validation Regex
-  const validateEmail = (emailStr: string) => {
-    const reg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
-    return reg.test(emailStr);
-  };
-
-  // लगआउट गर्ने फङ्सन
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    Alert.alert("लगआउट", "सफलतापूर्वक लगआउट भयो!");
+  async function checkUserSession() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      router.replace("/home");
+    } else {
+      setCheckingAuth(false);
+    }
   }
 
-  // १. Sign Up र Log In Handle गर्ने फङ्सन
   async function handleAuth() {
     if (!email || !password) {
-      Alert.alert("त्रुटि", "कृपया इमेल र पासवर्ड राख्नुहोस्!");
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      Alert.alert("गलत इमेल", "कृपया सही इमेल ठेगाना राख्नुहोस्!");
-      return;
-    }
-
-    if (isSignUp && (!fullName || !gender || !userRole)) {
-      Alert.alert(
-        "अपुरो जानकारी",
-        "कृपया नाम, लिङ्ग र युजर टाइप सबै छान्नुहोस्!",
-      );
+      Alert.alert("Truti", "Kripaya email ra password rakhnuhos!");
       return;
     }
 
     setLoading(true);
 
     if (isSignUp) {
-      // Supabase मा Role, Name, Gender Metadata सहित Sign Up गर्ने
       const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
+        email,
+        password,
         options: {
-          data: {
-            full_name: fullName,
-            gender: gender,
-            role: userRole, // 'Landlord' वा 'Tenant'
-          },
+          data: { full_name: fullName, gender, role: userRole },
         },
       });
 
       if (error) {
-        Alert.alert("साइन अप असफल भयो", error.message);
+        Alert.alert("Sign Up Asafal Bhayo", error.message);
       } else {
-        Alert.alert(
-          "OTP पठाइयो!",
-          "कृपया आफ्नो इमेल चेक गरेर 6-digit OTP हाल्नुहोस्।",
-        );
-        setShowOtpScreen(true);
+        Alert.alert("Safal Bhayo!", "Khata banyo!");
+        router.replace("/home");
       }
     } else {
-      // Log In गर्ने
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
+        email,
+        password,
       });
 
       if (error) {
-        Alert.alert("लगइन असफल भयो", error.message);
+        Alert.alert("Login Asafal Bhayo", error.message);
       } else {
-        Alert.alert("स्वागत छ!", "सफलतापूर्वक लगइन भयो!");
+        router.replace("/home");
       }
-    }
-
-    setLoading(false);
-  }
-
-  // २. OTP Verify गर्ने फङ्सन
-  async function handleVerifyOtp() {
-    if (!otp) {
-      Alert.alert("त्रुटि", "कृपया ६-अङ्कको OTP कोड राख्नुहोस्!");
-      return;
-    }
-
-    setLoading(true);
-
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: email,
-      token: otp,
-      type: "signup",
-    });
-
-    if (error) {
-      Alert.alert("सत्यापन असफल भयो", error.message);
-    } else {
-      Alert.alert("सफल भयो!", "तपाईंको खाता सफलतापूर्वक भेरिफाई भयो!");
-      setShowOtpScreen(false);
     }
 
     setLoading(false);
@@ -157,108 +86,27 @@ export default function AuthScreen() {
     );
   }
 
-  // यदि युजर लगइन छ भने प्रोफाइल स्क्रिन देखाउने
-  if (user) {
-    const userMeta = user.user_metadata || {};
-    return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Nepal Rent</Text>
-          <Text style={styles.subtitle}>तपाईं सफलतापूर्वक लगइन हुनुहुन्छ!</Text>
-
-          <View style={styles.profileBox}>
-            <Text style={styles.userInfo}>इमेल: {user.email}</Text>
-            {userMeta.full_name && (
-              <Text style={styles.userInfo}>नाम: {userMeta.full_name}</Text>
-            )}
-            {userMeta.role && (
-              <Text style={styles.userInfo}>
-                प्रकार:{" "}
-                {userMeta.role === "Landlord"
-                  ? "घरबेटी (Landlord)"
-                  : "भाडामा बस्ने (Tenant)"}
-              </Text>
-            )}
-            {userMeta.gender && (
-              <Text style={styles.userInfo}>
-                लिङ्ग:{" "}
-                {userMeta.gender === "Male"
-                  ? "पुरुष"
-                  : userMeta.gender === "Female"
-                    ? "महिला"
-                    : "अन्य"}
-              </Text>
-            )}
-          </View>
-
-          <TouchableOpacity style={styles.buttonDanger} onPress={handleSignOut}>
-            <Text style={styles.buttonText}>लगआउट (Log Out)</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  // OTP Verify गर्ने स्क्रिन
-  if (showOtpScreen) {
-    return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Nepal Rent</Text>
-          <Text style={styles.subtitle}>{email} मा पठाइएको OTP हाल्नुहोस्</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="६-अङ्कको OTP कोड"
-            placeholderTextColor="#888"
-            value={otp}
-            onChangeText={setOtp}
-            keyboardType="number-pad"
-            maxLength={6}
-          />
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleVerifyOtp}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? "भेरिफाई हुँदैछ..." : "OTP भेरिफाई गर्नुहोस्"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.switchContainer}
-            onPress={() => setShowOtpScreen(false)}
-          >
-            <Text style={styles.switchText}>साइन अप फारममा फर्कनुहोस्</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  // मुख्य लगइन र साइन अप फारम
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Nepal Rent</Text>
+        <Text style={styles.title}>Nepal Rent 🏠</Text>
         <Text style={styles.subtitle}>
-          {isSignUp ? "नयाँ खाता बनाउनुहोस् (Sign Up)" : "स्वागत छ (Log In)"}
+          {isSignUp
+            ? "Naya Khata Bananuhos (Sign Up)"
+            : "Login Garnuhos (Log In)"}
         </Text>
 
         {isSignUp && (
           <>
             <TextInput
               style={styles.input}
-              placeholder="पुरा नाम (Full Name)"
+              placeholder="Pura Naam (Full Name)"
               placeholderTextColor="#888"
               value={fullName}
               onChangeText={setFullName}
             />
 
-            {/* Role Selection */}
-            <Text style={styles.label}>तपाईं को हुनुहुन्छ?</Text>
+            <Text style={styles.label}>Tapai ko hunuhunchha?</Text>
             <View style={styles.row}>
               <TouchableOpacity
                 style={[
@@ -273,7 +121,7 @@ export default function AuthScreen() {
                     userRole === "Tenant" && styles.chipTextActive,
                   ]}
                 >
-                  भाडामा बस्ने (Tenant)
+                  Bhadut (Tenant)
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -289,18 +137,17 @@ export default function AuthScreen() {
                     userRole === "Landlord" && styles.chipTextActive,
                   ]}
                 >
-                  घरबेटी (Landlord)
+                  Gharbeti (Landlord)
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Gender Selection */}
-            <Text style={styles.label}>लिङ्ग (Gender):</Text>
+            <Text style={styles.label}>Ling (Gender):</Text>
             <View style={styles.row}>
               {[
-                { label: "पुरुष", val: "Male" },
-                { label: "महिला", val: "Female" },
-                { label: "अन्य", val: "Other" },
+                { label: "Purush", val: "Male" },
+                { label: "Mahila", val: "Female" },
+                { label: "Anya", val: "Other" },
               ].map((g) => (
                 <TouchableOpacity
                   key={g.val}
@@ -323,7 +170,7 @@ export default function AuthScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="इमेल (Email)"
+          placeholder="Email Address"
           placeholderTextColor="#888"
           value={email}
           onChangeText={setEmail}
@@ -333,7 +180,7 @@ export default function AuthScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="पासवर्ड (Password)"
+          placeholder="Password"
           placeholderTextColor="#888"
           value={password}
           onChangeText={setPassword}
@@ -347,10 +194,10 @@ export default function AuthScreen() {
         >
           <Text style={styles.buttonText}>
             {loading
-              ? "प्रक्रिया हुँदैछ..."
+              ? "Prakriya hundai chha..."
               : isSignUp
-                ? "साइन अप गर्नुहोस्"
-                : "लगइन गर्नुहोस्"}
+                ? "Sign Up Garnuhos"
+                : "Login Garnuhos"}
           </Text>
         </TouchableOpacity>
 
@@ -360,8 +207,8 @@ export default function AuthScreen() {
         >
           <Text style={styles.switchText}>
             {isSignUp
-              ? "पहिल्यै खाता छ? लगइन गर्नुहोस्"
-              : "खाता छैन? नयाँ साइन अप गर्नुहोस्"}
+              ? "Pahilai khata chha? Login garnuhos"
+              : "Khata chaina? Naya Sign Up garnuhos"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -372,10 +219,10 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f4f6f8",
     padding: 20,
+    backgroundColor: "#f4f6f8",
+    alignItems: "center",
+    justifyContent: "center",
   },
   center: {
     flex: 1,
@@ -384,31 +231,30 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 500,
     backgroundColor: "#ffffff",
-    padding: 25,
+    padding: 20,
     borderRadius: 15,
-    elevation: 4,
+    elevation: 3,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#007AFF",
     textAlign: "center",
-    marginBottom: 5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#555",
     textAlign: "center",
     marginBottom: 20,
+    marginTop: 5,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
     color: "#444",
     marginBottom: 8,
-    marginTop: 5,
   },
   row: {
     flexDirection: "row",
@@ -438,39 +284,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
-  profileBox: {
-    backgroundColor: "#f0f4f8",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  userInfo: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 8,
-  },
   input: {
     backgroundColor: "#f9f9f9",
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 10,
-    padding: 14,
+    padding: 12,
     fontSize: 15,
-    marginBottom: 15,
+    marginBottom: 12,
     color: "#333",
   },
   button: {
     backgroundColor: "#007AFF",
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 10,
-  },
-  buttonDanger: {
-    backgroundColor: "#FF3B30",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
+    marginTop: 5,
   },
   buttonText: {
     color: "#fff",
@@ -478,7 +307,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   switchContainer: {
-    marginTop: 20,
+    marginTop: 15,
     alignItems: "center",
   },
   switchText: {
